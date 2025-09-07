@@ -30,6 +30,7 @@ def clean_streenames(df, street_col, out_col="strassen_name_clean"):
         .str.replace("pl.", "pl")
         .str.replace(" ", "")
         .str.replace("-", "")
+        .str.replace(".", "")
         .str.replace("ä", "ae")
         .str.replace("ö", "oe")
         .str.replace("ü", "ue")
@@ -38,7 +39,7 @@ def clean_streenames(df, street_col, out_col="strassen_name_clean"):
     return df
 
 
-# %% Bad Berleburg
+# %% Bad Berleburg, Siegen
 def assign_wahlbezirk_v2(
     street, number, gemeinde_df, bezirk_name="Stimmbezirk", range_column="HNr.-Bereich"
 ):
@@ -143,6 +144,8 @@ def assign_wahlbezirk_v2(
     return ""
 
 
+# Bad Berleburg - - - - - - - - - - - - - - - - - - - - - - - - -
+
 badberleburg_addr_gdf = addr_gdf[addr_gdf["city"].str.contains("Bad Berleburg")].copy()
 badberleburg_addr_gdf = clean_streenames(badberleburg_addr_gdf, "street")
 
@@ -170,8 +173,46 @@ badberleburg_addr_gdf["BezirkNr"] = badberleburg_addr_gdf.apply(
 
 
 badberleburg_addr_gdf.to_csv(
-    out_fol + "badberleburg.csv", sep=";", encoding="utf8", index=False
+    out_fol + "Badberleburg.csv", sep=";", encoding="utf8", index=False
 )
+
+
+# Siegen - - - - - - - - - - - - - - - - - - - - - - - - -
+
+siegen_addr_gdf = addr_gdf[addr_gdf["city"].str.contains("Siegen")].copy()
+siegen_addr_gdf = clean_streenames(siegen_addr_gdf, "street")
+
+siegen_gemeinde_df = pd.read_excel(
+    main_fol + "prep/Siegen_BekanntmachungWahlbezirkseinteilungKommunalwahl2025.xlsx"
+)
+# split addresses into street and house numer ranges
+pattern = r"^(.*?)(\d.*)$"
+split_data = siegen_gemeinde_df["Straße-Hausnummernbereich"].str.extract(pattern)
+siegen_gemeinde_df["street"] = split_data[0].str.strip()  # Remove trailing spaces
+siegen_gemeinde_df["HNr.-Bereich"] = split_data[1]
+
+siegen_gemeinde_df = clean_streenames(siegen_gemeinde_df, "street")
+siegen_gemeinde_df["strassen_name_clean"] = (
+    siegen_gemeinde_df["strassen_name_clean"]
+    .replace("johhenrgrafstr", "johannhenrichgrafstr")
+    .replace("edschneiddavidsstr", "eduardschneiderdavidsstr")
+)
+
+# check example Stöppelsweg, with overlapping ranges in gemeinde data and letters in ranges
+siegen_addr_gdf["BezirkNr"] = ""
+siegen_addr_gdf["BezirkNr"] = siegen_addr_gdf.apply(
+    lambda row: assign_wahlbezirk_v2(
+        row["strassen_name_clean"],
+        row["number"],
+        siegen_gemeinde_df,
+        bezirk_name="Wahlbezirk",
+        range_column="HNr.-Bereich",
+    ),
+    axis=1,
+)
+
+
+siegen_addr_gdf.to_csv(out_fol + "Siegen.csv", sep=";", encoding="utf8", index=False)
 
 
 # %% Hallenberg
